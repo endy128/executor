@@ -125,17 +125,10 @@ module emu
     assign VIDEO_ARX = 0; assign VIDEO_ARY = 0;
 
     // 4. Tying off the "missing source" nodes
+    // We add CLK_VIDEO and CLK_AUDIO here to ensure they are NOT optimized away
+    assign OSD_STATUS = {30'd0, CLK_VIDEO, CLK_AUDIO}; 
+    
     assign LED_USER = 0; assign LED_POWER = 1; assign LED_DISK = 0;
-    assign SDRAM_A = 0; assign SDRAM_BA = 0; assign SDRAM_nCAS = 1;
-    assign SDRAM_nRAS = 1; assign SDRAM_nWE = 1; assign SDRAM_nCS = 1;
-    assign SDRAM_DQ = 16'hZZZZ; assign SDRAM_DQML = 0; assign SDRAM_DQMH = 0;
-    assign SDRAM_CLK = 0; assign SDRAM_CKE = 0;
-    assign HDMI_FREEZE = 0; assign HDMI_BLACKOUT = 0; assign HDMI_BOB_DEINT = 0;
-    assign DDRAM_ADDR = 0; assign DDRAM_BE = 0; assign DDRAM_BURSTCNT = 0;
-    assign DDRAM_CLK = 0; assign DDRAM_DIN = 0; assign DDRAM_RD = 0; assign DDRAM_WE = 0;
-    assign SD_SCK = 0; assign SD_MOSI = 0; assign SD_CS = 1;
-    assign UART_TXD = 0; assign UART_CTS = 0; assign UART_DSR = 0;
-    assign USER_OUT = 0;
 
     wire dummy_clk = CLK_VIDEO ^ CLK_AUDIO;
 endmodule
