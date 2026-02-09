@@ -29,9 +29,6 @@ jobs:
           args: quartus_map MySoundToy
 
       - name: Full Compile FPGA Core
-        uses: docker://ghcr.io/raetro/quartus:mister
-
-      - name: Compile FPGA Core
         # Using the Raetro mirror which is specifically maintained for MiSTer actions
         uses: docker://ghcr.io/raetro/quartus:mister
         with:
