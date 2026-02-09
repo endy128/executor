@@ -1691,6 +1691,15 @@ wire  [1:0] led_power;
 wire  [1:0] led_disk;
 wire  [1:0] btn;
 
+// --- PASTE THIS NEW BLOCK HERE ---
+pll pll (
+    .refclk(FPGA_CLK1_50),
+    .rst(0),
+    .outclk_0(clk_sys),    // Connects the main system clock
+    .outclk_1(clk_vid)     // Connects the video clock
+);
+// ---------------------------------
+
 sync_fix sync_v(clk_vid, vs_emu, vs_fix);
 sync_fix sync_h(clk_vid, hs_emu, hs_fix);
 
