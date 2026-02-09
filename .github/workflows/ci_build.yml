@@ -5,11 +5,15 @@ on: [push, pull_request]
 jobs:
   build:
     runs-on: ubuntu-latest
+    # THIS BLOCK IS THE FIX: It grants the runner permission to pull the image
+    permissions:
+      contents: read
+      packages: read
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      # 1. CLEANUP: Free up space for the massive Quartus image
       - name: Cleanup Disk Space
         run: |
           sudo rm -rf /usr/share/dotnet
@@ -17,14 +21,13 @@ jobs:
           sudo rm -rf "/usr/local/share/boost"
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
 
-      # 2. THE BUILD: Using the official MiSTer GitHub Container image
       - name: Compile FPGA Core
-        uses: docker://ghcr.io/mister-devel/quartus:latest
+        # Using the Raetro mirror which is specifically maintained for MiSTer actions
+        uses: docker://ghcr.io/raetro/quartus:mister
         with:
           args: |
             quartus_sh --flow compile MySoundToy
 
-      # 3. UPLOAD: Save the .rbf file so you can download it
       - name: Upload RBF
         uses: actions/upload-artifact@v4
         with:
