@@ -125,10 +125,14 @@ module emu
     assign VIDEO_ARX = 0; assign VIDEO_ARY = 0;
 
     // 4. Tying off the "missing source" nodes
-    // We add CLK_VIDEO and CLK_AUDIO here to ensure they are NOT optimized away
-    assign OSD_STATUS = {30'd0, CLK_VIDEO, CLK_AUDIO}; 
+    // Use the clocks in a way that doesn't "drive" the output directly
+    assign OSD_STATUS = 32'd0; 
     
-    assign LED_USER = 0; assign LED_POWER = 1; assign LED_DISK = 0;
+    // This "uses" the clocks in a dummy logic gate so they aren't optimized away
+    wire clk_presence = CLK_VIDEO ^ CLK_AUDIO;
+    assign LED_USER = {7'b0, clk_presence}; // Blink/Light user LED if clocks exist
+    
+    assign LED_POWER = 1; 
+    assign LED_DISK = 0;
 
-    wire dummy_clk = CLK_VIDEO ^ CLK_AUDIO;
 endmodule
