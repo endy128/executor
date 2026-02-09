@@ -5,7 +5,7 @@ module emu
 	input         CLK_VIDEO,
 	input         CLK_AUDIO,
 
-	// Pins for the MiSTer Framework (All must be UPPERCASE)
+	// Pins for the MiSTer Framework (Must be UPPERCASE)
 	input         RESET,
 	input  [31:0] JOYSTICK_0,
 	input  [31:0] JOYSTICK_1,
@@ -36,7 +36,7 @@ module emu
 	output  [7:0] LED_POWER,
 	output  [7:0] LED_DISK,
 	
-	// SDRAM/DDRAM (Required even if unused)
+	// SDRAM/DDRAM (Required - DQ MUST BE INOUT)
 	output [12:0] SDRAM_A,
 	output  [1:0] SDRAM_BA,
 	output        SDRAM_nCAS,
@@ -49,6 +49,7 @@ module emu
 	output        SDRAM_CLK,
 	output        SDRAM_CKE,
 
+	// Extra framework connections
 	input  [11:0] ADC_BUS,
 	input  [31:0] BUTTONS,
 	input         HDMI_WIDTH,
@@ -83,12 +84,12 @@ module emu
 	output [15:0] USER_OUT
 );
 
-    // 1. CORE NAME
+    // 1. CORE CONFIG
     localparam CONF_STR = "SoundToy;;";
     assign INFO = 32'd0;
     assign OSD_STATUS = 32'd0;
 
-    // 2. AUDIO LOGIC
+    // 2. AUDIO LOGIC: Connect your core to UPPERCASE ports
     wire [15:0] toy_audio;
     hk628_core your_sound_toy (
         .clk(CLK_50M),
@@ -102,7 +103,7 @@ module emu
     assign AUDIO_S = 0;
     assign AUDIO_MIX = 0;
 
-    // 3. VIDEO LOGIC (Black Screen)
+    // 3. VIDEO LOGIC (Solid Black Screen)
     reg [9:0] h_cnt, v_cnt;
     always @(posedge CLK_50M) begin
         if (h_cnt < 799) h_cnt <= h_cnt + 1;
@@ -121,7 +122,7 @@ module emu
     assign VGA_SL = 0; assign VGA_F1 = 0; assign VGA_SCALER = 0; assign VGA_DISABLE = 0;
     assign VIDEO_ARX = 0; assign VIDEO_ARY = 0;
 
-    // 4. CLEANUP (Tying unused pins)
+    // 4. Tying off the "missing source" nodes
     assign LED_USER = 0; assign LED_POWER = 1; assign LED_DISK = 0;
     assign SDRAM_A = 0; assign SDRAM_BA = 0; assign SDRAM_nCAS = 1;
     assign SDRAM_nRAS = 1; assign SDRAM_nWE = 1; assign SDRAM_nCS = 1;
