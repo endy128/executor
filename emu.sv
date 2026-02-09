@@ -135,4 +135,5 @@ module emu
     assign UART_TXD = 0; assign UART_CTS = 0; assign UART_DSR = 0;
     assign USER_OUT = 0;
 
+    wire dummy_clk = CLK_VIDEO ^ CLK_AUDIO;
 endmodule

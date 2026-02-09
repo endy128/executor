@@ -48,3 +48,4 @@ set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_
 set_global_assignment -name VERILOG_MACRO "VGA_8BIT=1"
 set_global_assignment -name VERILOG_MACRO "NO_DIRECT_VIDEO=1"
 set_global_assignment -name VERILOG_MACRO "FORCED_VGACLK=1"
+set_global_assignment -name VERILOG_MACRO "NO_VGA_CLK_SW=1"
