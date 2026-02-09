@@ -5,16 +5,16 @@ module emu
 	input         CLK_VIDEO,
 	input         CLK_AUDIO,
 
-	// Pins for the MiSTer Framework
+	// Pins for the MiSTer Framework (All must be UPPERCASE)
 	input         RESET,
-	input  [31:0] joystick_0,
-	input  [31:0] joystick_1,
-	input  [31:0] status,
-	output [31:0] info,
-	output [15:0] audio_l,
-	output [15:0] audio_r,
-	output        audio_s,     // <--- Added (missing in log)
-	output [1:0]  audio_mix,   // <--- Added (missing in log)
+	input  [31:0] JOYSTICK_0,
+	input  [31:0] JOYSTICK_1,
+	input  [31:0] STATUS,
+	output [31:0] INFO,
+	output [15:0] AUDIO_L,
+	output [15:0] AUDIO_R,
+	output        AUDIO_S,
+	output [1:0]  AUDIO_MIX,
 
 	// Video Output
 	output        VGA_HS,
@@ -36,7 +36,7 @@ module emu
 	output  [7:0] LED_POWER,
 	output  [7:0] LED_DISK,
 	
-	// SDRAM Pins
+	// SDRAM/DDRAM (Required even if unused)
 	output [12:0] SDRAM_A,
 	output  [1:0] SDRAM_BA,
 	output        SDRAM_nCAS,
@@ -49,7 +49,6 @@ module emu
 	output        SDRAM_CLK,
 	output        SDRAM_CKE,
 
-	// Missing ports that caused your Error 12002:
 	input  [11:0] ADC_BUS,
 	input  [31:0] BUTTONS,
 	input         HDMI_WIDTH,
@@ -84,26 +83,26 @@ module emu
 	output [15:0] USER_OUT
 );
 
-    // 1. CORE CONFIG
+    // 1. CORE NAME
     localparam CONF_STR = "SoundToy;;";
-    assign info = 32'd0;
+    assign INFO = 32'd0;
     assign OSD_STATUS = 32'd0;
 
-    // 2. AUDIO LOGIC: Connect your hk628_core
+    // 2. AUDIO LOGIC
     wire [15:0] toy_audio;
     hk628_core your_sound_toy (
         .clk(CLK_50M),
-        .btn(joystick_0[7:0]),
-        .low_batt_btn(joystick_0[8]),
+        .btn(JOYSTICK_0[7:0]),
+        .low_batt_btn(JOYSTICK_0[8]),
         .pcm_out(toy_audio)
     );
 
-    assign audio_l = toy_audio;
-    assign audio_r = toy_audio;
-    assign audio_s = 0;
-    assign audio_mix = 0;
+    assign AUDIO_L = toy_audio;
+    assign AUDIO_R = toy_audio;
+    assign AUDIO_S = 0;
+    assign AUDIO_MIX = 0;
 
-    // 3. VIDEO LOGIC (Solid Black Screen)
+    // 3. VIDEO LOGIC (Black Screen)
     reg [9:0] h_cnt, v_cnt;
     always @(posedge CLK_50M) begin
         if (h_cnt < 799) h_cnt <= h_cnt + 1;
@@ -119,14 +118,10 @@ module emu
     assign VGA_DE = (h_cnt < 640 && v_cnt < 480);
     assign VGA_R = 0; assign VGA_G = 0; assign VGA_B = 0;
     assign CE_PIXEL = 1;
-    assign VGA_SL = 0;
-    assign VGA_F1 = 0;
-    assign VGA_SCALER = 0;
-    assign VGA_DISABLE = 0;
-    assign VIDEO_ARX = 0;
-    assign VIDEO_ARY = 0;
+    assign VGA_SL = 0; assign VGA_F1 = 0; assign VGA_SCALER = 0; assign VGA_DISABLE = 0;
+    assign VIDEO_ARX = 0; assign VIDEO_ARY = 0;
 
-    // 4. CLEANUP: Tie all other unused outputs to 0
+    // 4. CLEANUP (Tying unused pins)
     assign LED_USER = 0; assign LED_POWER = 1; assign LED_DISK = 0;
     assign SDRAM_A = 0; assign SDRAM_BA = 0; assign SDRAM_nCAS = 1;
     assign SDRAM_nRAS = 1; assign SDRAM_nWE = 1; assign SDRAM_nCS = 1;
