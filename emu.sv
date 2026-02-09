@@ -105,7 +105,9 @@ module emu
 
     // 3. VIDEO LOGIC (Solid Black Screen)
     reg [9:0] h_cnt, v_cnt;
-    always @(posedge CLK_50M) begin
+    
+    // Use CLK_VIDEO instead of CLK_50M for video counters
+    always @(posedge CLK_VIDEO) begin
         if (h_cnt < 799) h_cnt <= h_cnt + 1;
         else begin
             h_cnt <= 0;
