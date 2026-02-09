@@ -5,41 +5,32 @@ on: [push, pull_request]
 jobs:
   build:
     runs-on: ubuntu-latest
-    # THIS BLOCK IS THE FIX: It grants the runner permission to pull the image
-    permissions:
-      contents: read
-      packages: read
+    # Run inside the container to save startup time and redundant file copies
+    container:
+      image: ghcr.io/raetro/quartus:mister
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Cleanup Disk Space
         run: |
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /opt/ghc
           sudo rm -rf "/usr/local/share/boost"
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          df -h # Just to verify how much space we cleared
 
-      # This allows the build to fail in ~1 minute if there are port mapping or syntax errors
-      - name: Fast Analysis & Synthesis
-        uses: docker://ghcr.io/raetro/quartus:mister
-        with:
-          args: quartus_map MySoundToy
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Full Compile FPGA Core
-        uses: docker://ghcr.io/raetro/quartus:mister
+      - name: Fast Analysis
+        # If this passes in ~60s, we know the code is valid
+        run: quartus_map MySoundToy
 
-      - name: Compile FPGA Core
-        # Using the Raetro mirror which is specifically maintained for MiSTer actions
-        uses: docker://ghcr.io/raetro/quartus:mister
-        with:
-          args: |
-            quartus_sh --flow compile MySoundToy
+      - name: Full Compile
+        # Only runs if synthesis is successful
+        run: quartus_sh --flow compile MySoundToy
 
       - name: Upload RBF
         uses: actions/upload-artifact@v4
         with:
-          name: MiSTer_SoundFX_Core
-          path: |
-            output_files/*.rbf
+          name: MiSTer_SoundToy_Core
+          path: output_files/*.rbf
