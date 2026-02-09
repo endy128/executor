@@ -1,3 +1,6 @@
+`define NO_VGA_CLK_SW
+`define MISTER_SMALL
+
 module emu
 (
 	// Master Clocks
@@ -103,10 +106,10 @@ module emu
     assign AUDIO_S = 0;
     assign AUDIO_MIX = 0;
 
-    // 3. VIDEO LOGIC (Solid Black Screen)
+    // 3. VIDEO LOGIC
     reg [9:0] h_cnt, v_cnt;
     
-    // Use CLK_VIDEO instead of CLK_50M for video counters
+    // We explicitly use CLK_VIDEO for logic to "pull" the clock through the netlist
     always @(posedge CLK_VIDEO) begin
         if (h_cnt < 799) h_cnt <= h_cnt + 1;
         else begin
@@ -116,23 +119,14 @@ module emu
         end
     end
 
-    assign VGA_HS = !(h_cnt >= 656 && h_cnt < 752);
-    assign VGA_VS = !(v_cnt >= 490 && v_cnt < 492);
-    assign VGA_DE = (h_cnt < 640 && v_cnt < 480);
-    assign VGA_R = 0; assign VGA_G = 0; assign VGA_B = 0;
-    assign CE_PIXEL = 1;
-    assign VGA_SL = 0; assign VGA_F1 = 0; assign VGA_SCALER = 0; assign VGA_DISABLE = 0;
-    assign VIDEO_ARX = 0; assign VIDEO_ARY = 0;
-
-    // 4. Tying off the "missing source" nodes
-    // Use the clocks in a way that doesn't "drive" the output directly
-    assign OSD_STATUS = 32'd0; 
+    // 4. CLEANUP & CLOCK "TOUCHING"
+    // This is the fix for Error 15834: 
+    // We combine all clocks into a dummy signal so Quartus sees them as "used"
+    wire clk_gate = CLK_50M & CLK_VIDEO & CLK_AUDIO;
+    assign OSD_STATUS = {31'd0, clk_gate}; 
     
-    // This "uses" the clocks in a dummy logic gate so they aren't optimized away
-    wire clk_presence = CLK_VIDEO ^ CLK_AUDIO;
-    assign LED_USER = {7'b0, clk_presence}; // Blink/Light user LED if clocks exist
-    
-    assign LED_POWER = 1; 
+    assign LED_USER = 8'b0;
+    assign LED_POWER = 1;
     assign LED_DISK = 0;
 
 endmodule
