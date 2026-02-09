@@ -1,0 +1,33 @@
+name: Build MiSTer Core
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # 1. THE CLEANUP STEP: Free up ~20GB of space for Quartus
+      - name: Cleanup Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+
+      # 2. THE BUILD STEP: Run Quartus inside a Docker container
+      - name: Compile FPGA Core
+        uses: docker://misterdevel/quartus:latest
+        with:
+          args: |
+            quartus_sh --flow compile MySoundToy
+
+      # 3. UPLOAD THE RESULT
+      - name: Upload RBF
+        uses: actions/upload-artifact@v3
+        with:
+          name: MiSTer_SoundFX_Core
+          path: |
+            output_files/*.rbf
