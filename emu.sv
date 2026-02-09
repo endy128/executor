@@ -1,9 +1,11 @@
 module emu
 (
-	// Master Clock
+	// Master Clocks
 	input         CLK_50M,
+	input         CLK_VIDEO,
+	input         CLK_AUDIO,
 
-	// Pins for the MiSTer Framework (Must be present!)
+	// Pins for the MiSTer Framework
 	input         RESET,
 	input  [31:0] joystick_0,
 	input  [31:0] joystick_1,
@@ -11,6 +13,8 @@ module emu
 	output [31:0] info,
 	output [15:0] audio_l,
 	output [15:0] audio_r,
+	output        audio_s,     // <--- Added (missing in log)
+	output [1:0]  audio_mix,   // <--- Added (missing in log)
 
 	// Video Output
 	output        VGA_HS,
@@ -20,36 +24,72 @@ module emu
 	output  [7:0] VGA_G,
 	output  [7:0] VGA_B,
 	output        CE_PIXEL,
+	output        VGA_SL,
+	output        VGA_F1,
+	output [1:0]  VGA_SCALER,
+	output        VGA_DISABLE,
 
-	// Placeholder pins for all the other stuff the framework expects
-	input         CLK_VIDEO,
-	input         CLK_AUDIO,
+	// Framework Communication
 	input  [64:0] HPS_BUS,
 	output [31:0] OSD_STATUS,
 	output  [7:0] LED_USER,
 	output  [7:0] LED_POWER,
 	output  [7:0] LED_DISK,
 	
-	// SDRAM/DDRAM placeholders (not used by our toy, but required by sys_top)
+	// SDRAM Pins
 	output [12:0] SDRAM_A,
 	output  [1:0] SDRAM_BA,
 	output        SDRAM_nCAS,
 	output        SDRAM_nRAS,
 	output        SDRAM_nWE,
 	output        SDRAM_nCS,
-	output [15:0] SDRAM_DQ,
+	inout  [15:0] SDRAM_DQ,
 	output        SDRAM_DQML,
 	output        SDRAM_DQMH,
 	output        SDRAM_CLK,
-	output        SDRAM_CKE
+	output        SDRAM_CKE,
+
+	// Missing ports that caused your Error 12002:
+	input  [11:0] ADC_BUS,
+	input  [31:0] BUTTONS,
+	input         HDMI_WIDTH,
+	input         HDMI_HEIGHT,
+	output        HDMI_FREEZE,
+	output        HDMI_BLACKOUT,
+	output        HDMI_BOB_DEINT,
+	output [27:0] DDRAM_ADDR,
+	output [7:0]  DDRAM_BE,
+	output [2:0]  DDRAM_BURSTCNT,
+	input         DDRAM_BUSY,
+	output        DDRAM_CLK,
+	output [63:0] DDRAM_DIN,
+	input  [63:0] DDRAM_DOUT,
+	input         DDRAM_DOUT_READY,
+	output        DDRAM_RD,
+	output        DDRAM_WE,
+	output [1:0]  VIDEO_ARX,
+	output [1:0]  VIDEO_ARY,
+	output        SD_SCK,
+	output        SD_MOSI,
+	input         SD_MISO,
+	output        SD_CS,
+	input         SD_CD,
+	input         UART_RXD,
+	output        UART_TXD,
+	output        UART_CTS,
+	input         UART_RTS,
+	input         UART_DTR,
+	output        UART_DSR,
+	input  [15:0] USER_IN,
+	output [15:0] USER_OUT
 );
 
-    // 1. CORE NAME (Visible in OSD)
+    // 1. CORE CONFIG
     localparam CONF_STR = "SoundToy;;";
     assign info = 32'd0;
     assign OSD_STATUS = 32'd0;
 
-    // 2. AUDIO LOGIC
+    // 2. AUDIO LOGIC: Connect your hk628_core
     wire [15:0] toy_audio;
     hk628_core your_sound_toy (
         .clk(CLK_50M),
@@ -60,6 +100,8 @@ module emu
 
     assign audio_l = toy_audio;
     assign audio_r = toy_audio;
+    assign audio_s = 0;
+    assign audio_mix = 0;
 
     // 3. VIDEO LOGIC (Solid Black Screen)
     reg [9:0] h_cnt, v_cnt;
@@ -77,9 +119,24 @@ module emu
     assign VGA_DE = (h_cnt < 640 && v_cnt < 480);
     assign VGA_R = 0; assign VGA_G = 0; assign VGA_B = 0;
     assign CE_PIXEL = 1;
+    assign VGA_SL = 0;
+    assign VGA_F1 = 0;
+    assign VGA_SCALER = 0;
+    assign VGA_DISABLE = 0;
+    assign VIDEO_ARX = 0;
+    assign VIDEO_ARY = 0;
 
-    // 4. CLEANUP: Tie unused outputs to 0 so Quartus doesn't complain
+    // 4. CLEANUP: Tie all other unused outputs to 0
     assign LED_USER = 0; assign LED_POWER = 1; assign LED_DISK = 0;
-    assign SDRAM_CLK = 0; // and so on for other SDRAM pins if needed
+    assign SDRAM_A = 0; assign SDRAM_BA = 0; assign SDRAM_nCAS = 1;
+    assign SDRAM_nRAS = 1; assign SDRAM_nWE = 1; assign SDRAM_nCS = 1;
+    assign SDRAM_DQ = 16'hZZZZ; assign SDRAM_DQML = 0; assign SDRAM_DQMH = 0;
+    assign SDRAM_CLK = 0; assign SDRAM_CKE = 0;
+    assign HDMI_FREEZE = 0; assign HDMI_BLACKOUT = 0; assign HDMI_BOB_DEINT = 0;
+    assign DDRAM_ADDR = 0; assign DDRAM_BE = 0; assign DDRAM_BURSTCNT = 0;
+    assign DDRAM_CLK = 0; assign DDRAM_DIN = 0; assign DDRAM_RD = 0; assign DDRAM_WE = 0;
+    assign SD_SCK = 0; assign SD_MOSI = 0; assign SD_CS = 1;
+    assign UART_TXD = 0; assign UART_CTS = 0; assign UART_DSR = 0;
+    assign USER_OUT = 0;
 
 endmodule
