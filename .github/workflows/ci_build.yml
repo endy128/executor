@@ -21,6 +21,15 @@ jobs:
           sudo rm -rf "/usr/local/share/boost"
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
 
+      # This allows the build to fail in ~1 minute if there are port mapping or syntax errors
+      - name: Fast Analysis & Synthesis
+        uses: docker://ghcr.io/raetro/quartus:mister
+        with:
+          args: quartus_map MySoundToy
+
+      - name: Full Compile FPGA Core
+        uses: docker://ghcr.io/raetro/quartus:mister
+
       - name: Compile FPGA Core
         # Using the Raetro mirror which is specifically maintained for MiSTer actions
         uses: docker://ghcr.io/raetro/quartus:mister
