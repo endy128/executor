@@ -23,10 +23,10 @@ jobs:
           df -h # Just to verify how much space we cleared
 
       # This allows the build to fail in ~1 minute if there are port mapping or syntax errors
-      - name: Fast Analysis & Synthesis
-        uses: docker://ghcr.io/raetro/quartus:mister
-        with:
-          args: quartus_map MySoundToy
+      # - name: Fast Analysis & Synthesis
+      #   uses: docker://ghcr.io/raetro/quartus:mister
+      #   with:
+      #     args: quartus_map MySoundToy
 
       - name: Full Compile FPGA Core
         # Using the Raetro mirror which is specifically maintained for MiSTer actions

@@ -1691,16 +1691,18 @@ wire  [1:0] led_power;
 wire  [1:0] led_disk;
 wire  [1:0] btn;
 
-// --- DIRECT CLOCK ASSIGNMENT (NO PLL) ---
+// --- PLL INSTANTIATION (REQUIRED BY FRAMEWORK) ---
 
-// Since we want 50MHz, we use the raw FPGA clock directly.
-// This saves resources and prevents routing congestion.
-assign clk_sys = FPGA_CLK1_50;
+pll pll (
+    .refclk(FPGA_CLK2_50),  // CHANGED: Use CLK2 to avoid conflict with HDMI (CLK1)
+    .rst(0),
+    .outclk_0(clk_sys)      // Generates our valid System Clock
+);
 
-// Bridge video clock to system clock
+// Bridge the video clock to the system clock
 assign clk_vid = clk_sys;
 
-// ----------------------------------------
+// -------------------------------------------------
 
 sync_fix sync_v(clk_vid, vs_emu, vs_fix);
 sync_fix sync_h(clk_vid, hs_emu, hs_fix);
