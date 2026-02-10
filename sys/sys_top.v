@@ -1691,14 +1691,19 @@ wire  [1:0] led_power;
 wire  [1:0] led_disk;
 wire  [1:0] btn;
 
-// --- PASTE THIS NEW BLOCK HERE ---
+// --- REPLACE THE PREVIOUS PLL BLOCK WITH THIS ---
+
 pll pll (
     .refclk(FPGA_CLK1_50),
     .rst(0),
-    .outclk_0(clk_sys),    // Connects the main system clock
-    .outclk_1(clk_vid)     // Connects the video clock
+    .outclk_0(clk_sys)      // Connect the ONE available output to the system
 );
-// ---------------------------------
+
+// "Bridge" the video clock to the system clock
+// This tells the FPGA: "Use the same speed for video as you do for the CPU"
+assign clk_vid = clk_sys;
+
+// ------------------------------------------------
 
 sync_fix sync_v(clk_vid, vs_emu, vs_fix);
 sync_fix sync_h(clk_vid, hs_emu, hs_fix);
