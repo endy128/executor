@@ -1860,7 +1860,7 @@ emu emu
 	.SDRAM2_EN(io_dig),
 `endif
 
-	.BUTTONS(btn),
+	.BUTTONS({62'd0, btn}),
 	.OSD_STATUS(osd_status),
 
 	.SD_SCK(SD_CLK),
