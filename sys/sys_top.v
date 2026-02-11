@@ -1759,7 +1759,7 @@ always @(posedge clk_sys) sl_r <= FB_EN ? 2'b00 : scanlines;
 
 emu emu
 (
-	.CLK_50M(FPGA_CLK2_50),
+	.CLK_50M(clk_sys),
 	.RESET(reset),
 	.HPS_BUS({fb_en, sl, f1, HDMI_TX_VS, 
 				 clk_100m, clk_ihdmi,

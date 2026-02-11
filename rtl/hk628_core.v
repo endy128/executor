@@ -17,7 +17,7 @@ module hk628_core (
     always @(posedge clk) tick_cnt <= tick ? 0 : tick_cnt + 1;
 
     // --- State Machine ---
-    reg [3:0] state = 0;
+    reg [3:0] state = 1;
     reg [23:0] counter = 0;
     reg [15:0] freq_period, tone_cnt;
     reg speaker_state;

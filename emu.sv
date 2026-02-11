@@ -94,7 +94,7 @@ module emu
 );
 
     // 1. Core Name
-    localparam CONF_STR = "SoundToy;;";
+	localparam CONF_STR = "SOUNDTOY;S;O1,Battery,Normal,Low;";  // Added 'S' at the end of the name and a proper separator
     assign OSD_STATUS = 32'd0;
 
     // 2. Sound Logic
@@ -129,8 +129,15 @@ module emu
     assign VGA_B = 0;
     assign CE_PIXEL = 1;
 
+    // --- HEARTBEAT SENSOR ---
+	reg [24:0] heartbeat;
+	always @(posedge CLK_50M) heartbeat <= heartbeat + 1;
+	
+	// Redirect debug signals to your front panel LEDs
+	assign LED_USER  = 0;                // Internal LED
+	assign LED_POWER = 1;                // Stay solid on
+	assign LED_DISK  = heartbeat[24];    // THIS WILL BLINK THE HDD LED ON YOUR CASE
     // 4. Tie off unused outputs to 0
-    assign LED_USER = 0; assign LED_POWER = 1; assign LED_DISK = 0;
     assign SDRAM_CLK = CLK_50M; assign SDRAM_CKE = 1;
     assign UART_TXD = 0; assign UART_RTS = 0; assign UART_DTR = 0;
     assign DDRAM_CLK = CLK_50M; assign USER_OUT = 0; assign SD_MISO = 0;
