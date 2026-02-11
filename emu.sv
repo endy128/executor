@@ -94,22 +94,22 @@ module emu
 );
 
     // 1. Core Name
-	localparam CONF_STR = "SOUNDTOY;S;O1,Battery,Normal,Low;";  // Added 'S' at the end of the name and a proper separator
+	localparam CONF_STR = "S0U,SoundToy;S;O1,Battery,Normal,Low;"; // The 'S0U' tells the framework to initialize the OSD properly
     assign OSD_STATUS = 32'd0;
 
     // 2. Sound Logic
     wire [15:0] audio_out;
     hk628_core sound_toy (
         .clk(CLK_50M),
-        .btn(joystick_0[7:0]),
-        .low_batt_btn(joystick_0[8]),
+        .btn(joystick_0[7:0]) | status_in[7:0]), // Use Joystick OR OSD buttons
+        .low_batt_btn(status_in[1]),
         .pcm_out(audio_out)
     );
     
     assign AUDIO_L = audio_out;
     assign AUDIO_R = audio_out;
-    assign AUDIO_S = 0;
-    assign AUDIO_MIX = 0;
+    assign AUDIO_S = 1'b1;     // Signal that audio is present
+    assign AUDIO_MIX = 2'b00;  // 00 usually means 'No extra mixing/Pass through'
 
     // 3. Black Screen Generator (Prevents Static)
     reg [9:0] h_cnt, v_cnt;
@@ -124,9 +124,9 @@ module emu
     assign VGA_HS = !(h_cnt >= 656 && h_cnt < 752);
     assign VGA_VS = !(v_cnt >= 490 && v_cnt < 492);
     assign VGA_DE = (h_cnt < 640 && v_cnt < 480);
-    assign VGA_R = 0; 
-    assign VGA_G = 0; 
-    assign VGA_B = 0;
+    assign VGA_R = 8'h10; // Very dark grey instead of pure black
+    assign VGA_G = 8'h10; 
+    assign VGA_B = 8'h10;
     assign CE_PIXEL = 1;
 
     // --- HEARTBEAT SENSOR ---
