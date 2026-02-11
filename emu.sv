@@ -101,7 +101,7 @@ module emu
     wire [15:0] audio_out;
     hk628_core sound_toy (
         .clk(CLK_50M),
-        .btn(joystick_0[7:0]) | status_in[7:0]), // Use Joystick OR OSD buttons
+        .btn(joystick_0[7:0] | status_in[7:0]), // Use Joystick OR OSD buttons
         .low_batt_btn(status_in[1]),
         .pcm_out(audio_out)
     );
