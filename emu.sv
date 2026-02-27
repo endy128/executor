@@ -47,8 +47,9 @@ module emu
     input SD_SCK, input SD_MOSI, output SD_MISO, input SD_CS, input SD_CD
 );
 
-    // 1. OSD Setup (S0U prefix helps USB/Input init)
+// 1. OSD Setup
     localparam CONF_STR = "S0U,SoundToy;S;O1,Battery,Normal,Low;";
+    localparam CONF_STR_LEN = $size(CONF_STR)>>3;
     
     // Internal wires replacing the broken inputs
     wire [31:0] status;
@@ -56,8 +57,8 @@ module emu
     wire [31:0] joystick_1;
     
     // 2. THE MISSING LINK: The User I/O Module
-    // This bridges the Linux processor (HPS) with the FPGA for OSD and Joysticks
-    user_io #(.STRLEN($size(CONF_STR)>>3)) user_io (
+    // Renamed instance to 'io_ctrl' to prevent Quartus naming collisions
+    user_io #(.STRLEN(CONF_STR_LEN)) io_ctrl (
         .clk_sys        (CLK_50M),
         .conf_str       (CONF_STR),
         .SPI_SCK        (USER_IN[6]),
@@ -71,6 +72,7 @@ module emu
 
     assign USER_OUT[6:1] = 6'b000000;
     assign OSD_STATUS = status; 
+    assign VGA_SL = 2'b00; // Fixes Warning (10034): no driver for VGA_SL
 
     // 3. Audio Subsystem
     wire [15:0] audio_out;
@@ -86,21 +88,17 @@ module emu
     assign AUDIO_S = 1'b1;     
     assign AUDIO_MIX = 2'b00;  
 
-    // 4. Pixel Clock Generator (25MHz from 50MHz)
-    reg ce_pix;
-    always @(posedge CLK_50M) ce_pix <= ~ce_pix;
-    assign CE_PIXEL = ce_pix;
-
-    // 5. Video Timings (640x480 @ 60Hz)
+// 4. Video Timings (640x480 @ 60Hz)
     reg [9:0] h_cnt = 0;
     reg [9:0] v_cnt = 0;
 
     always @(posedge CLK_50M) begin
         if (ce_pix) begin
-            if (h_cnt < 799) h_cnt <= h_cnt + 1;
+            // Fixed: Changed 1 to 10'd1 to match the 10-bit register size
+            if (h_cnt < 799) h_cnt <= h_cnt + 10'd1;
             else begin
                 h_cnt <= 0;
-                if (v_cnt < 524) v_cnt <= v_cnt + 1;
+                if (v_cnt < 524) v_cnt <= v_cnt + 10'd1;
                 else v_cnt <= 0;
             end
         end
@@ -116,10 +114,11 @@ module emu
     assign VGA_G = VGA_DE ? pattern : 8'h00; 
     assign VGA_B = VGA_DE ? pattern : 8'h00;
 
-    // 7. Housekeeping
+// 7. Housekeeping
     reg [24:0] heartbeat;
-    always @(posedge CLK_50M) heartbeat <= heartbeat + 1;
-    assign LED_DISK = heartbeat[24]; 
+    // Fixed: Changed 1 to 25'd1 to match the 25-bit register size
+    always @(posedge CLK_50M) heartbeat <= heartbeat + 25'd1;
+    assign LED_DISK = heartbeat[24];
     
     assign LED_USER = 0; assign LED_POWER = 1; assign SDRAM_CLK = CLK_50M; assign SDRAM_CKE = 1;
     assign UART_TXD = 0; assign UART_RTS = 0; assign UART_DTR = 0;
