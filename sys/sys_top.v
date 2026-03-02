@@ -1691,18 +1691,15 @@ wire  [1:0] led_power;
 wire  [1:0] led_disk;
 wire  [1:0] btn;
 
-// --- PLL INSTANTIATION (REQUIRED BY FRAMEWORK) ---
-
+// --- REPLACE THE PREVIOUS PLL BLOCK WITH THIS ---
 pll pll (
-    .refclk(FPGA_CLK2_50),  // CHANGED: Use CLK2 to avoid conflict with HDMI (CLK1)
+    .refclk(FPGA_CLK1_50),
     .rst(0),
-    .outclk_0(clk_sys)      // Generates our valid System Clock
+    .outclk_0(clk_sys)      
 );
-
-// Bridge the video clock to the system clock
+// "Bridge" the video clock to the system clock
 assign clk_vid = clk_sys;
-
-// -------------------------------------------------
+// ------------------------------------------------
 
 sync_fix sync_v(clk_vid, vs_emu, vs_fix);
 sync_fix sync_h(clk_vid, hs_emu, hs_fix);
