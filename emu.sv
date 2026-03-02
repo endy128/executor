@@ -61,8 +61,8 @@ module emu
     assign CLK_VIDEO = clk_25m; 
 
     // --- 2. THE LINUX SPI BRIDGE (hps_io) ---
-    localparam CONF_STR = "MYSOUNDTOY;;O,1,Battery,Normal,Low;";
-    
+    localparam CONF_STR = "MYSOUNDTOY;;O1,Battery,Normal,Low;";
+
     wire [127:0] status;
     wire  [31:0] joystick_0;
     wire  [31:0] joystick_1;

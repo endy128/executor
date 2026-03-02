@@ -1,0 +1,43 @@
+name: Manual Core Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: 'Release Version (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: read
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Cleanup Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          df -h
+
+      - name: Full Compile FPGA Core
+        uses: docker://ghcr.io/raetro/quartus:mister
+        with:
+          args: quartus_sh --flow compile MySoundToy
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.version_tag }}
+          name: "MySoundToy Release ${{ github.event.inputs.version_tag }}"
+          files: output_files/*.rbf
+          body: "Automated build of the Executor SoundFX Core."
+          draft: false
+          prerelease: false
