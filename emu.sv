@@ -2,8 +2,8 @@ module emu
 (
     // Clocks and Reset
     input         CLK_50M,
-    output        CLK_VIDEO,    // OUTPUT: Driven by our PLL to satisfy the video scaler
-    input         CLK_AUDIO,    // INPUT: From sys_top pll_audio
+    output        CLK_VIDEO,    // We send 50MHz straight to the scaler
+    input         CLK_AUDIO,    
     input         RESET,
 
     // Video Interface
@@ -16,7 +16,7 @@ module emu
     output [15:0] AUDIO_L, output [15:0] AUDIO_R,
     output        AUDIO_S, output [1:0]  AUDIO_MIX,
 
-    // Framework Status & Buttons
+    // Framework Status
     output [31:0] OSD_STATUS,
     output [31:0] LED_USER,
     output        LED_POWER,
@@ -37,19 +37,13 @@ module emu
 );
 
     // --- 1. SYSTEM AND VIDEO CLOCKS ---
-    wire clk_sys = CLK_50M; // System logic & SPI bus runs safely at 50MHz
-
-    wire clk_vid;
-    pll pll_inst (
-        .refclk(CLK_50M),
-        .rst(1'b0),
-        .outclk_0(clk_vid)
-    );
-    assign CLK_VIDEO = clk_vid; // Satisfies the hardware router!
+    wire clk_sys = CLK_50M; 
+    
+    // We pass 50MHz to the scaler, but CE_PIXEL will divide it to 25MHz
+    assign CLK_VIDEO = CLK_50M; 
 
     // --- 2. THE LINUX SPI BRIDGE (hps_io) ---
-    // This is what prevents the black-screen crash!
-    localparam CONF_STR = "MYSOUNDTOY;;O1,Battery,Normal,Low;";
+    localparam CONF_STR = "MYSOUNDTOY;;O,1,Battery,Normal,Low;";
     
     wire [127:0] status;
     wire  [31:0] joystick_0;
@@ -80,18 +74,22 @@ module emu
     assign AUDIO_S = 1'b1;     
     assign AUDIO_MIX = 2'b00;  
 
-    // --- 4. VIDEO TIMINGS ---
-    assign CE_PIXEL = 1'b1; 
+    // --- 4. VIDEO TIMINGS (ROCK SOLID 60Hz) ---
+    reg ce_pix = 1'b0; 
+    always @(posedge CLK_50M) ce_pix <= ~ce_pix; // Toggles at exactly 25MHz
+    assign CE_PIXEL = ce_pix; 
 
     reg [9:0] h_cnt = 10'd0;
     reg [9:0] v_cnt = 10'd0;
 
-    always @(posedge clk_vid) begin
-        if (h_cnt < 10'd799) h_cnt <= h_cnt + 10'd1;
-        else begin
-            h_cnt <= 10'd0;
-            if (v_cnt < 10'd524) v_cnt <= v_cnt + 10'd1;
-            else v_cnt <= 10'd0;
+    always @(posedge CLK_50M) begin
+        if (ce_pix) begin // Only update the screen at 25MHz
+            if (h_cnt < 10'd799) h_cnt <= h_cnt + 10'd1;
+            else begin
+                h_cnt <= 10'd0;
+                if (v_cnt < 10'd524) v_cnt <= v_cnt + 10'd1;
+                else v_cnt <= 10'd0;
+            end
         end
     end
 
