@@ -3,7 +3,7 @@ module emu
     // Clocks and Reset
     input         CLK_50M,
     output        CLK_VIDEO,
-    output        CLK_AUDIO,
+    input         CLK_AUDIO,
     input         RESET,
 
     // Video Interface
