@@ -1,8 +1,8 @@
 module emu
 (
     // Clocks and Reset
-    input         CLK_50M,      // 50MHz system clock from sys_top
-    input         CLK_VIDEO,    // 20MHz video clock from sys_top PLL
+    input         CLK_50M,
+    input         CLK_VIDEO,
     input         CLK_AUDIO,
     input         RESET,
 
@@ -16,7 +16,10 @@ module emu
     output [15:0] AUDIO_L, output [15:0] AUDIO_R,
     output        AUDIO_S, output [1:0]  AUDIO_MIX,
 
-    // Framework Status & Buttons
+    // THE NATIVE FRAMEWORK INPUTS (No hps_io needed!)
+    input  [31:0] joystick_0,
+    input  [31:0] joystick_1,
+    input  [31:0] status_in,
     output [31:0] OSD_STATUS,
     output [31:0] LED_USER,
     output        LED_POWER,
@@ -27,8 +30,7 @@ module emu
     output [12:0] SDRAM_A, output [1:0] SDRAM_BA, inout [15:0] SDRAM_DQ, output SDRAM_DQML, output SDRAM_DQMH, output SDRAM_nWE, output SDRAM_nCAS, output SDRAM_nRAS, output SDRAM_nCS, output SDRAM_BA0, output SDRAM_BA1, output SDRAM_CLK, output SDRAM_CKE,
     input [15:0] UART_RXD, output [15:0] UART_TXD, output UART_RTS, input UART_CTS, output UART_DTR, input UART_DSR,
     
-    input [3:0] ADC_BUS, 
-    inout [48:0] HPS_BUS, 
+    input [3:0] ADC_BUS, input [63:0] HPS_BUS, // Back to default inputs
     
     output [31:0] DDRAM_ADDR, output [7:0] DDRAM_BE, output DDRAM_WE, output DDRAM_RD, output [1:0] DDRAM_BURSTCNT, input [63:0] DDRAM_DOUT, input DDRAM_DOUT_READY, output [63:0] DDRAM_DIN, input DDRAM_BUSY, output DDRAM_CLK,
     input [15:0] HDMI_WIDTH, input [15:0] HDMI_HEIGHT, input HDMI_FREEZE, input HDMI_BLACKOUT, input HDMI_BOB_DEINT,
@@ -36,35 +38,19 @@ module emu
     input USER_IN, output USER_OUT, input SD_SCK, input SD_MOSI, output SD_MISO, input SD_CS, input SD_CD
 );
 
-    // 1. Core Clocks
-    wire clk_sys = CLK_50M;   // Safe 50MHz for logic and Linux SPI
-    wire clk_vid = CLK_VIDEO; // Hardware PLL 20MHz for video
-
-    // 2. OSD Setup
+    // 1. OSD Setup
     localparam CONF_STR = "MYSOUNDTOY;;O1,Battery,Normal,Low;";
     
-    wire [127:0] status;
-    wire  [31:0] joystick_0;
-    wire  [31:0] joystick_1;
-    
-    // 3. The Linux/SPI Bridge
-    hps_io #(.CONF_STR(CONF_STR)) hps_io (
-        .clk_sys(clk_sys),
-        .HPS_BUS(HPS_BUS),
-        .status(status),
-        .joystick_0(joystick_0),
-        .joystick_1(joystick_1)
-    );
-
-    assign OSD_STATUS = status[31:0]; 
+    // Feed the native status straight back to the OSD handler
+    assign OSD_STATUS = status_in; 
     assign VGA_SL = 2'b00;
 
-    // 4. Audio Subsystem
+    // 2. Audio Subsystem
     wire [15:0] audio_out;
     hk628_core sound_toy (
-        .clk(clk_sys),                
+        .clk(CLK_50M),                
         .btn(joystick_0[7:0]),        
-        .low_batt_btn(status[1]),     
+        .low_batt_btn(status_in[1]),     
         .pcm_out(audio_out)
     );
     
@@ -73,18 +59,23 @@ module emu
     assign AUDIO_S = 1'b1;     
     assign AUDIO_MIX = 2'b00;  
 
-    // 5. Video Timings (Driven natively by clk_vid!)
-    assign CE_PIXEL = 1'b1;
+    // 3. Pixel Clock Generator (Creates the 25MHz VGA pulse)
+    reg ce_pix = 1'b0; 
+    always @(posedge CLK_50M) ce_pix <= ~ce_pix;
+    assign CE_PIXEL = ce_pix;
 
+    // 4. Video Timings (640x480)
     reg [9:0] h_cnt = 10'd0;
     reg [9:0] v_cnt = 10'd0;
 
-    always @(posedge clk_vid) begin
-        if (h_cnt < 10'd799) h_cnt <= h_cnt + 10'd1;
-        else begin
-            h_cnt <= 10'd0;
-            if (v_cnt < 10'd524) v_cnt <= v_cnt + 10'd1;
-            else v_cnt <= 10'd0;
+    always @(posedge CLK_50M) begin
+        if (ce_pix) begin
+            if (h_cnt < 10'd799) h_cnt <= h_cnt + 10'd1;
+            else begin
+                h_cnt <= 10'd0;
+                if (v_cnt < 10'd524) v_cnt <= v_cnt + 10'd1;
+                else v_cnt <= 10'd0;
+            end
         end
     end
 
@@ -97,17 +88,17 @@ module emu
     assign VGA_G = VGA_DE ? pattern : 8'h00; 
     assign VGA_B = VGA_DE ? pattern : 8'h00;
 
-    // 6. Housekeeping & Visual Debuggers
+    // 5. Housekeeping & Visual Debuggers
     reg [25:0] heartbeat = 26'd0;
-    always @(posedge clk_sys) heartbeat <= heartbeat + 26'd1;
+    always @(posedge CLK_50M) heartbeat <= heartbeat + 26'd1;
     
     assign LED_USER  = heartbeat[25]; 
-    assign LED_DISK  = HPS_BUS[33]; 
+    assign LED_DISK  = status_in[1]; // Will light up when you toggle the OSD Battery option!
     assign LED_POWER = 1'b1;          
         
-    assign SDRAM_CLK = clk_sys; assign SDRAM_CKE = 1;
+    assign SDRAM_CLK = CLK_50M; assign SDRAM_CKE = 1;
     assign UART_TXD = 0; assign UART_RTS = 0; assign UART_DTR = 0;
-    assign DDRAM_CLK = clk_sys; assign USER_OUT = 0; assign SD_MISO = 0;
+    assign DDRAM_CLK = CLK_50M; assign USER_OUT = 0; assign SD_MISO = 0;
     assign VGA_SCALER = 0; assign VGA_DISABLE = 0;
     assign VIDEO_ARX = 13'd4; assign VIDEO_ARY = 13'd3;
     assign SDRAM_A = 0; assign SDRAM_BA = 0; assign SDRAM_DQMH = 0; assign SDRAM_DQML = 0; 
