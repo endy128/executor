@@ -1691,16 +1691,6 @@ wire  [1:0] led_power;
 wire  [1:0] led_disk;
 wire  [1:0] btn;
 
-// FORCE 50MHz SYSTEM CLOCK (Fixes the Black Screen Linux Crash)
-assign clk_sys = FPGA_CLK1_50; 
-
-// USE YOUR 20MHz PLL FOR VIDEO (Fixes the hdmi_clk_sw Quartus Error)
-pll pll (
-    .refclk(FPGA_CLK1_50),
-    .rst(1'b0),
-    .outclk_0(clk_vid) 
-);
-
 sync_fix sync_v(clk_vid, vs_emu, vs_fix);
 sync_fix sync_h(clk_vid, hs_emu, hs_fix);
 
@@ -1756,7 +1746,7 @@ always @(posedge clk_sys) sl_r <= FB_EN ? 2'b00 : scanlines;
 
 emu emu
 (
-	.CLK_50M(clk_sys),
+	.CLK_50M(FPGA_CLK2_50),
 	.RESET(reset),
 	.HPS_BUS({fb_en, sl, f1, HDMI_TX_VS, 
 				 clk_100m, clk_ihdmi,
@@ -1856,7 +1846,7 @@ emu emu
 	.SDRAM2_EN(io_dig),
 `endif
 
-	.BUTTONS({62'd0, btn}),
+	.BUTTONS(btn),
 	.OSD_STATUS(osd_status),
 
 	.SD_SCK(SD_CLK),
