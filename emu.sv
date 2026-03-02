@@ -1,8 +1,8 @@
 module emu
 (
     // Clocks and Reset
-    input         CLK_50M,      // 50MHz incoming from the DE10-Nano
-    output        CLK_VIDEO,    // OUTPUT: Sends video clock up to the framework
+    input         CLK_50M,      // Native global clock pin (Perfect for sys)
+    output        CLK_VIDEO,    // MUST be a real PLL output
     input         CLK_AUDIO,
     input         RESET,
 
@@ -36,13 +36,18 @@ module emu
     input USER_IN, output USER_OUT, input SD_SCK, input SD_MOSI, output SD_MISO, input SD_CS, input SD_CD
 );
 
-    // 1. Core Clocks (The Bypass Fix)
-    // Tap into the framework's native 100MHz PLL hidden in the HPS bus
-    wire clk_100m = HPS_BUS[43];
-    wire clk_sys  = clk_100m;
-    
-    // Export the 100MHz clock to satisfy the framework's video rules
-    assign CLK_VIDEO = clk_100m; 
+    // 1. Core Clocks
+    // System clock MUST be > 40MHz to safely read the SPI bus. CLK_50M is perfect.
+    wire clk_sys = CLK_50M;
+
+    // Video clock MUST be a real PLL to satisfy the hardware router.
+    wire clk_vid;
+    pll pll_inst (
+        .refclk(CLK_50M),
+        .rst(1'b0),
+        .outclk_0(clk_vid) // From your logs, this outputs 20MHz
+    );
+    assign CLK_VIDEO = clk_vid; 
 
     // 2. OSD Setup
     localparam CONF_STR = "MYSOUNDTOY;;O1,Battery,Normal,Low;";
@@ -53,7 +58,7 @@ module emu
     
     // 3. The Linux/SPI Bridge
     hps_io #(.CONF_STR(CONF_STR)) hps_io (
-        .clk_sys(clk_sys),   // Safely drives the 100MHz clock out to HPS_BUS[36]
+        .clk_sys(clk_sys),   // Safely drives the 50MHz clock out
         .HPS_BUS(HPS_BUS),
         .status(status),
         .joystick_0(joystick_0),
@@ -66,7 +71,7 @@ module emu
     // 4. Audio Subsystem
     wire [15:0] audio_out;
     hk628_core sound_toy (
-        .clk(CLK_50M),                // Uses raw 50MHz pin for perfect audio pitch
+        .clk(clk_sys),                
         .btn(joystick_0[7:0]),        
         .low_batt_btn(status[1]),     
         .pcm_out(audio_out)
@@ -77,25 +82,19 @@ module emu
     assign AUDIO_S = 1'b1;     
     assign AUDIO_MIX = 2'b00;  
 
-    // 5. Pixel Clock Generator (25MHz)
-    // 100MHz divided by 4 = 25MHz (Perfect for VGA)
-    reg [1:0] ce_div = 2'd0; 
-    always @(posedge clk_sys) ce_div <= ce_div + 2'd1;
-    wire ce_pix = (ce_div == 2'd0);
-    assign CE_PIXEL = ce_pix;
+    // 5. Video Timings (Driven natively by clk_vid!)
+    assign CE_PIXEL = 1'b1; // No divider needed, we are running at pure 20MHz
 
-    // 6. Video Timings (640x480)
     reg [9:0] h_cnt = 10'd0;
     reg [9:0] v_cnt = 10'd0;
 
-    always @(posedge clk_sys) begin
-        if (ce_pix) begin
-            if (h_cnt < 10'd799) h_cnt <= h_cnt + 10'd1;
-            else begin
-                h_cnt <= 10'd0;
-                if (v_cnt < 10'd524) v_cnt <= v_cnt + 10'd1;
-                else v_cnt <= 10'd0;
-            end
+    // CRITICAL FIX: The video loop now steps using clk_vid, not clk_sys
+    always @(posedge clk_vid) begin
+        if (h_cnt < 10'd799) h_cnt <= h_cnt + 10'd1;
+        else begin
+            h_cnt <= 10'd0;
+            if (v_cnt < 10'd524) v_cnt <= v_cnt + 10'd1;
+            else v_cnt <= 10'd0;
         end
     end
 
@@ -108,7 +107,7 @@ module emu
     assign VGA_G = VGA_DE ? pattern : 8'h00; 
     assign VGA_B = VGA_DE ? pattern : 8'h00;
 
-    // 7. Housekeeping & Visual Debuggers
+    // 6. Housekeeping & Visual Debuggers
     reg [25:0] heartbeat = 26'd0;
     always @(posedge clk_sys) heartbeat <= heartbeat + 26'd1;
     
