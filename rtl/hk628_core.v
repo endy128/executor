@@ -26,7 +26,7 @@ module hk628_core (
         end
     end
 
-// --- State Machine ---
+    // --- State Machine ---
     reg [3:0] state = 1;
     reg [23:0] counter = 0;
     reg [15:0] freq_period, tone_cnt;
@@ -44,9 +44,9 @@ module hk628_core (
                     if (btn[1]) state <= 2; // Echo Rifle
                     if (btn[2]) state <= 3; // Phone
                     if (btn[3]) state <= 4; // Dual Tone
-                    if (btn[4]) state <= 5; // Bomb Drop (Whistle)
-                    if (btn[5]) state <= 6; // Explosion (Noise)
-                    if (btn[6]) state <= 7; // Electric Zapper
+                    if (btn[4]) state <= 5; // Bomb 1
+                    if (btn[5]) state <= 6; // Bomb 2
+                    if (btn[6]) state <= 7; // Electric Gun
                     if (btn[7]) state <= 8; // Machine Gun
                     counter <= 0;
                 end
@@ -55,15 +55,13 @@ module hk628_core (
                 if (counter > 30000) state <= 0; // Reset after ~1.5s
             end
 
-            // Synthesis Logic (Tuned for 90s Toy Sounds)
+            // Synthesis Logic
             case (state)
                 1: freq_period <= 200 + counter[10:0];         // Rifle Sweep
                 2: freq_period <= 200 + {counter[9:0], 2'b00}; // Echo Rifle
                 3: freq_period <= counter[11] ? 800 : 500;     // Telephone
                 4: freq_period <= counter[10] ? 400 : 300;     // Dual Tone Rifle
-                5: freq_period <= 200 + counter[13:3];         // Bomb Drop (Falling pitch)
-                6: freq_period <= 0;                           // Explosion uses pure LFSR noise
-                7: freq_period <= 150 + lfsr[5:0];             // Electric Gun (Pitch jitter)
+                7: freq_period <= 100 + (lfsr[5:0] << 2);      // Electric Gun
                 8: freq_period <= 300;                         // Machine Gun base pitch
                 default: freq_period <= 0;
             endcase
@@ -84,19 +82,13 @@ module hk628_core (
         end
     end
 
-    // --- Output Mixer (DC Offset Popping Fixed!) ---
+    // --- Output Mixer ---
     always @(posedge clk) begin
-        if (state == 0) begin
-            pcm_out <= 16'd0; // Pure silence when off
-        end else begin
-            case (state)
-                // Explosion: noise for a short burst, then true silence
-                6: pcm_out <= (counter < 15000) ? (lfsr[0] ? 16'h3000 : -16'h3000) : 16'd0; 
-                // Machine Gun: Tone bursts alternating with true silence
-                8: pcm_out <= counter[11] ? (speaker_state ? 16'h3000 : -16'h3000) : 16'd0; 
-                // Everything else: Standard alternating square wave
-                default: pcm_out <= speaker_state ? 16'h3000 : -16'h3000;
-            endcase
-        end
+        case (state)
+            5, 6: pcm_out <= (lfsr[0] && counter < 15000) ? 16'h3000 : 16'hD000; // Bombs
+            8:    pcm_out <= (speaker_state && counter[11]) ? 16'h3000 : 16'hD000; // Machine Gun Burst
+            0:    pcm_out <= 16'd0; // Perfect silence when off
+            default: pcm_out <= speaker_state ? 16'h3000 : 16'hD000;
+        endcase
     end
 endmodule
