@@ -2,7 +2,7 @@ module emu
 (
     // Clocks and Reset
     input         CLK_50M,
-    output        CLK_VIDEO,
+    output        CLK_VIDEO,    // OUTPUT: Driven by our PLL to satisfy the scaler
     input         CLK_AUDIO,
     input         RESET,
 
@@ -16,7 +16,7 @@ module emu
     output [15:0] AUDIO_L, output [15:0] AUDIO_R,
     output        AUDIO_S, output [1:0]  AUDIO_MIX,
 
-    // THE NATIVE FRAMEWORK INPUTS (No hps_io needed!)
+    // NATIVE FRAMEWORK PORTS
     input  [31:0] joystick_0,
     input  [31:0] joystick_1,
     input  [31:0] status_in,
@@ -30,7 +30,7 @@ module emu
     output [12:0] SDRAM_A, output [1:0] SDRAM_BA, inout [15:0] SDRAM_DQ, output SDRAM_DQML, output SDRAM_DQMH, output SDRAM_nWE, output SDRAM_nCAS, output SDRAM_nRAS, output SDRAM_nCS, output SDRAM_BA0, output SDRAM_BA1, output SDRAM_CLK, output SDRAM_CKE,
     input [15:0] UART_RXD, output [15:0] UART_TXD, output UART_RTS, input UART_CTS, output UART_DTR, input UART_DSR,
     
-    input [3:0] ADC_BUS, input [63:0] HPS_BUS, // Back to default inputs
+    input [3:0] ADC_BUS, input [63:0] HPS_BUS,
     
     output [31:0] DDRAM_ADDR, output [7:0] DDRAM_BE, output DDRAM_WE, output DDRAM_RD, output [1:0] DDRAM_BURSTCNT, input [63:0] DDRAM_DOUT, input DDRAM_DOUT_READY, output [63:0] DDRAM_DIN, input DDRAM_BUSY, output DDRAM_CLK,
     input [15:0] HDMI_WIDTH, input [15:0] HDMI_HEIGHT, input HDMI_FREEZE, input HDMI_BLACKOUT, input HDMI_BOB_DEINT,
@@ -38,14 +38,22 @@ module emu
     input USER_IN, output USER_OUT, input SD_SCK, input SD_MOSI, output SD_MISO, input SD_CS, input SD_CD
 );
 
+    // --- THE HARDWARE CLOCK FIX ---
+    // The video scaler physically demands a PLL. We generate 20MHz here.
+    wire clk_vid;
+    pll pll_inst (
+        .refclk(CLK_50M),
+        .rst(1'b0),
+        .outclk_0(clk_vid)
+    );
+    assign CLK_VIDEO = clk_vid;
+
     // 1. OSD Setup
     localparam CONF_STR = "MYSOUNDTOY;;O1,Battery,Normal,Low;";
-    
-    // Feed the native status straight back to the OSD handler
     assign OSD_STATUS = status_in; 
     assign VGA_SL = 2'b00;
 
-    // 2. Audio Subsystem
+    // 2. Audio Subsystem (Your fixed, slowed-down 90s toy chip!)
     wire [15:0] audio_out;
     hk628_core sound_toy (
         .clk(CLK_50M),                
@@ -59,23 +67,19 @@ module emu
     assign AUDIO_S = 1'b1;     
     assign AUDIO_MIX = 2'b00;  
 
-    // 3. Pixel Clock Generator (Creates the 25MHz VGA pulse)
-    reg ce_pix = 1'b0; 
-    always @(posedge CLK_50M) ce_pix <= ~ce_pix;
-    assign CE_PIXEL = ce_pix;
+    // 3. Pixel Clock Generator & Video Timings
+    // Running natively on the new 20MHz PLL clock
+    assign CE_PIXEL = 1'b1; 
 
-    // 4. Video Timings (640x480)
     reg [9:0] h_cnt = 10'd0;
     reg [9:0] v_cnt = 10'd0;
 
-    always @(posedge CLK_50M) begin
-        if (ce_pix) begin
-            if (h_cnt < 10'd799) h_cnt <= h_cnt + 10'd1;
-            else begin
-                h_cnt <= 10'd0;
-                if (v_cnt < 10'd524) v_cnt <= v_cnt + 10'd1;
-                else v_cnt <= 10'd0;
-            end
+    always @(posedge clk_vid) begin
+        if (h_cnt < 10'd799) h_cnt <= h_cnt + 10'd1;
+        else begin
+            h_cnt <= 10'd0;
+            if (v_cnt < 10'd524) v_cnt <= v_cnt + 10'd1;
+            else v_cnt <= 10'd0;
         end
     end
 
@@ -88,12 +92,12 @@ module emu
     assign VGA_G = VGA_DE ? pattern : 8'h00; 
     assign VGA_B = VGA_DE ? pattern : 8'h00;
 
-    // 5. Housekeeping & Visual Debuggers
+    // 4. Housekeeping
     reg [25:0] heartbeat = 26'd0;
     always @(posedge CLK_50M) heartbeat <= heartbeat + 26'd1;
     
     assign LED_USER  = heartbeat[25]; 
-    assign LED_DISK  = status_in[1]; // Will light up when you toggle the OSD Battery option!
+    assign LED_DISK  = status_in[1]; 
     assign LED_POWER = 1'b1;          
         
     assign SDRAM_CLK = CLK_50M; assign SDRAM_CKE = 1;
