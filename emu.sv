@@ -1,8 +1,8 @@
 module emu
 (
     // Clocks and Reset
-    input         CLK_50M,      // Native global clock pin (Perfect for sys)
-    output        CLK_VIDEO,    // MUST be a real PLL output
+    input         CLK_50M,      // 50MHz system clock from sys_top
+    input         CLK_VIDEO,    // 20MHz video clock from sys_top PLL
     input         CLK_AUDIO,
     input         RESET,
 
@@ -37,17 +37,8 @@ module emu
 );
 
     // 1. Core Clocks
-    // System clock MUST be > 40MHz to safely read the SPI bus. CLK_50M is perfect.
-    wire clk_sys = CLK_50M;
-
-    // Video clock MUST be a real PLL to satisfy the hardware router.
-    wire clk_vid;
-    pll pll_inst (
-        .refclk(CLK_50M),
-        .rst(1'b0),
-        .outclk_0(clk_vid) // From your logs, this outputs 20MHz
-    );
-    assign CLK_VIDEO = clk_vid; 
+    wire clk_sys = CLK_50M;   // Safe 50MHz for logic and Linux SPI
+    wire clk_vid = CLK_VIDEO; // Hardware PLL 20MHz for video
 
     // 2. OSD Setup
     localparam CONF_STR = "MYSOUNDTOY;;O1,Battery,Normal,Low;";
@@ -58,7 +49,7 @@ module emu
     
     // 3. The Linux/SPI Bridge
     hps_io #(.CONF_STR(CONF_STR)) hps_io (
-        .clk_sys(clk_sys),   // Safely drives the 50MHz clock out
+        .clk_sys(clk_sys),
         .HPS_BUS(HPS_BUS),
         .status(status),
         .joystick_0(joystick_0),
@@ -83,12 +74,11 @@ module emu
     assign AUDIO_MIX = 2'b00;  
 
     // 5. Video Timings (Driven natively by clk_vid!)
-    assign CE_PIXEL = 1'b1; // No divider needed, we are running at pure 20MHz
+    assign CE_PIXEL = 1'b1;
 
     reg [9:0] h_cnt = 10'd0;
     reg [9:0] v_cnt = 10'd0;
 
-    // CRITICAL FIX: The video loop now steps using clk_vid, not clk_sys
     always @(posedge clk_vid) begin
         if (h_cnt < 10'd799) h_cnt <= h_cnt + 10'd1;
         else begin
@@ -112,7 +102,7 @@ module emu
     always @(posedge clk_sys) heartbeat <= heartbeat + 26'd1;
     
     assign LED_USER  = heartbeat[25]; 
-    assign LED_DISK  = HPS_BUS[33];   // Should rapidly flicker when you press a key!
+    assign LED_DISK  = HPS_BUS[33]; 
     assign LED_POWER = 1'b1;          
         
     assign SDRAM_CLK = clk_sys; assign SDRAM_CKE = 1;
