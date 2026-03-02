@@ -2,8 +2,8 @@ module emu
 (
     // Clocks and Reset
     input         CLK_50M,
-    output        CLK_VIDEO,    // OUTPUT: Driven by our PLL to satisfy the scaler
-    input         CLK_AUDIO,
+    output        CLK_VIDEO,    // OUTPUT: Driven by our PLL to satisfy the video scaler
+    input         CLK_AUDIO,    // INPUT: From sys_top pll_audio
     input         RESET,
 
     // Video Interface
@@ -16,10 +16,7 @@ module emu
     output [15:0] AUDIO_L, output [15:0] AUDIO_R,
     output        AUDIO_S, output [1:0]  AUDIO_MIX,
 
-    // NATIVE FRAMEWORK PORTS
-    input  [31:0] joystick_0,
-    input  [31:0] joystick_1,
-    input  [31:0] status_in,
+    // Framework Status & Buttons
     output [31:0] OSD_STATUS,
     output [31:0] LED_USER,
     output        LED_POWER,
@@ -30,7 +27,8 @@ module emu
     output [12:0] SDRAM_A, output [1:0] SDRAM_BA, inout [15:0] SDRAM_DQ, output SDRAM_DQML, output SDRAM_DQMH, output SDRAM_nWE, output SDRAM_nCAS, output SDRAM_nRAS, output SDRAM_nCS, output SDRAM_BA0, output SDRAM_BA1, output SDRAM_CLK, output SDRAM_CKE,
     input [15:0] UART_RXD, output [15:0] UART_TXD, output UART_RTS, input UART_CTS, output UART_DTR, input UART_DSR,
     
-    input [3:0] ADC_BUS, input [63:0] HPS_BUS,
+    input [3:0] ADC_BUS, 
+    inout [48:0] HPS_BUS, // NATIVE SPI BUS
     
     output [31:0] DDRAM_ADDR, output [7:0] DDRAM_BE, output DDRAM_WE, output DDRAM_RD, output [1:0] DDRAM_BURSTCNT, input [63:0] DDRAM_DOUT, input DDRAM_DOUT_READY, output [63:0] DDRAM_DIN, input DDRAM_BUSY, output DDRAM_CLK,
     input [15:0] HDMI_WIDTH, input [15:0] HDMI_HEIGHT, input HDMI_FREEZE, input HDMI_BLACKOUT, input HDMI_BOB_DEINT,
@@ -38,27 +36,42 @@ module emu
     input USER_IN, output USER_OUT, input SD_SCK, input SD_MOSI, output SD_MISO, input SD_CS, input SD_CD
 );
 
-    // --- THE HARDWARE CLOCK FIX ---
-    // The video scaler physically demands a PLL. We generate 20MHz here.
+    // --- 1. SYSTEM AND VIDEO CLOCKS ---
+    wire clk_sys = CLK_50M; // System logic & SPI bus runs safely at 50MHz
+
     wire clk_vid;
     pll pll_inst (
         .refclk(CLK_50M),
         .rst(1'b0),
         .outclk_0(clk_vid)
     );
-    assign CLK_VIDEO = clk_vid;
+    assign CLK_VIDEO = clk_vid; // Satisfies the hardware router!
 
-    // 1. OSD Setup
+    // --- 2. THE LINUX SPI BRIDGE (hps_io) ---
+    // This is what prevents the black-screen crash!
     localparam CONF_STR = "MYSOUNDTOY;;O1,Battery,Normal,Low;";
-    assign OSD_STATUS = status_in; 
+    
+    wire [127:0] status;
+    wire  [31:0] joystick_0;
+    wire  [31:0] joystick_1;
+    
+    hps_io #(.CONF_STR(CONF_STR)) hps_io (
+        .clk_sys(clk_sys),
+        .HPS_BUS(HPS_BUS),
+        .status(status),
+        .joystick_0(joystick_0),
+        .joystick_1(joystick_1)
+    );
+
+    assign OSD_STATUS = status[31:0]; 
     assign VGA_SL = 2'b00;
 
-    // 2. Audio Subsystem (Your fixed, slowed-down 90s toy chip!)
+    // --- 3. AUDIO SUBSYSTEM ---
     wire [15:0] audio_out;
     hk628_core sound_toy (
         .clk(CLK_50M),                
         .btn(joystick_0[7:0]),        
-        .low_batt_btn(status_in[1]),     
+        .low_batt_btn(status[1]),     
         .pcm_out(audio_out)
     );
     
@@ -67,8 +80,7 @@ module emu
     assign AUDIO_S = 1'b1;     
     assign AUDIO_MIX = 2'b00;  
 
-    // 3. Pixel Clock Generator & Video Timings
-    // Running natively on the new 20MHz PLL clock
+    // --- 4. VIDEO TIMINGS ---
     assign CE_PIXEL = 1'b1; 
 
     reg [9:0] h_cnt = 10'd0;
@@ -92,12 +104,12 @@ module emu
     assign VGA_G = VGA_DE ? pattern : 8'h00; 
     assign VGA_B = VGA_DE ? pattern : 8'h00;
 
-    // 4. Housekeeping
+    // --- 5. HOUSEKEEPING ---
     reg [25:0] heartbeat = 26'd0;
     always @(posedge CLK_50M) heartbeat <= heartbeat + 26'd1;
     
     assign LED_USER  = heartbeat[25]; 
-    assign LED_DISK  = status_in[1]; 
+    assign LED_DISK  = status[1]; 
     assign LED_POWER = 1'b1;          
         
     assign SDRAM_CLK = CLK_50M; assign SDRAM_CKE = 1;
