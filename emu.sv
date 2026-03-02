@@ -36,17 +36,13 @@ module emu
     input USER_IN, output USER_OUT, input SD_SCK, input SD_MOSI, output SD_MISO, input SD_CS, input SD_CD
 );
 
-    // 1. Core Clocks
-    // The core takes the raw 50MHz and spins up the system clock
-    wire clk_sys;
-    pll pll_inst (
-        .refclk(CLK_50M),
-        .rst(1'b0),
-        .outclk_0(clk_sys)
-    );
+    // 1. Core Clocks (The Bypass Fix)
+    // Tap into the framework's native 100MHz PLL hidden in the HPS bus
+    wire clk_100m = HPS_BUS[43];
+    wire clk_sys  = clk_100m;
     
-    // We export the system clock to be used as the video clock
-    assign CLK_VIDEO = clk_sys; 
+    // Export the 100MHz clock to satisfy the framework's video rules
+    assign CLK_VIDEO = clk_100m; 
 
     // 2. OSD Setup
     localparam CONF_STR = "MYSOUNDTOY;;O1,Battery,Normal,Low;";
@@ -57,7 +53,7 @@ module emu
     
     // 3. The Linux/SPI Bridge
     hps_io #(.CONF_STR(CONF_STR)) hps_io (
-        .clk_sys(clk_sys),   // Safely drives the system clock out to HPS_BUS[36]
+        .clk_sys(clk_sys),   // Safely drives the 100MHz clock out to HPS_BUS[36]
         .HPS_BUS(HPS_BUS),
         .status(status),
         .joystick_0(joystick_0),
@@ -70,7 +66,7 @@ module emu
     // 4. Audio Subsystem
     wire [15:0] audio_out;
     hk628_core sound_toy (
-        .clk(clk_sys),                // Runs on our clean system clock
+        .clk(CLK_50M),                // Uses raw 50MHz pin for perfect audio pitch
         .btn(joystick_0[7:0]),        
         .low_batt_btn(status[1]),     
         .pcm_out(audio_out)
@@ -81,9 +77,11 @@ module emu
     assign AUDIO_S = 1'b1;     
     assign AUDIO_MIX = 2'b00;  
 
-    // 5. Pixel Clock Generator
-    reg ce_pix = 1'b0; 
-    always @(posedge clk_sys) ce_pix <= ~ce_pix;
+    // 5. Pixel Clock Generator (25MHz)
+    // 100MHz divided by 4 = 25MHz (Perfect for VGA)
+    reg [1:0] ce_div = 2'd0; 
+    always @(posedge clk_sys) ce_div <= ce_div + 2'd1;
+    wire ce_pix = (ce_div == 2'd0);
     assign CE_PIXEL = ce_pix;
 
     // 6. Video Timings (640x480)
@@ -111,10 +109,10 @@ module emu
     assign VGA_B = VGA_DE ? pattern : 8'h00;
 
     // 7. Housekeeping & Visual Debuggers
-    reg [24:0] heartbeat = 25'd0;
-    always @(posedge clk_sys) heartbeat <= heartbeat + 25'd1;
+    reg [25:0] heartbeat = 26'd0;
+    always @(posedge clk_sys) heartbeat <= heartbeat + 26'd1;
     
-    assign LED_USER  = heartbeat[24]; 
+    assign LED_USER  = heartbeat[25]; 
     assign LED_DISK  = HPS_BUS[33];   // Should rapidly flicker when you press a key!
     assign LED_POWER = 1'b1;          
         
