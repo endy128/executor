@@ -41,7 +41,7 @@ jobs:
           DST="output_files/MySoundToy_${DATE_STR}.rbf"
           
           if [ -f "$SRC" ]; then
-            mv "$SRC" "$DST"
+            sudo mv "$SRC" "$DST"
             echo "Renamed $SRC to $DST"
           else
             echo "Error: RBF file not found at $SRC"
