@@ -63,25 +63,31 @@ module hk628_core (
         end
     end
 
-    // --- Output Mixer (Safe & DC Offset Fixed) ---
+    // --- Output Mixer ---
     always @(posedge clk) begin
         if (state == 0) begin
-            pcm_out <= 16'sd0;
+            // Perfect silence when off
+            pcm_out <= 16'd0;
             
-        end else if (state == 5) begin
-            if (counter < 15000) pcm_out <= lfsr[0] ? 16'sd12288 : -16'sd12288;
-            else pcm_out <= 16'sd0;
-            
-        end else if (state == 6) begin
-            if (counter < 15000) pcm_out <= lfsr[0] ? 16'sd12288 : -16'sd12288;
-            else pcm_out <= 16'sd0;
+        end else if (state == 5 || state == 6) begin
+            // Bombs: Play LFSR noise for a short burst, then true silence
+            if (counter < 15000) begin
+                pcm_out <= lfsr[0] ? 16'h3000 : 16'hD000;
+            end else begin
+                pcm_out <= 16'd0;
+            end
             
         end else if (state == 8) begin
-            if (counter[11]) pcm_out <= speaker_state ? 16'sd12288 : -16'sd12288;
-            else pcm_out <= 16'sd0;
+            // Machine Gun: Tone bursts alternating with true silence
+            if (counter[11]) begin
+                pcm_out <= speaker_state ? 16'h3000 : 16'hD000;
+            end else begin
+                pcm_out <= 16'd0;
+            end
             
         end else begin
-            pcm_out <= speaker_state ? 16'sd12288 : -16'sd12288;
+            // States 1-4 (D-Pad) & 7: Standard continuous tone
+            pcm_out <= speaker_state ? 16'h3000 : 16'hD000;
         end
     end
 
