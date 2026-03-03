@@ -1,10 +1,9 @@
-# Create the base 50MHz clock (Using CLK2 now!)
-create_clock -name {FPGA_CLK2_50} -period 20.000 [get_ports {FPGA_CLK2_50}]
-
-# Derive PLL clocks (Automagically finds the new PLL settings)
+# Automatically derive all standard clocks
 derive_pll_clocks
 derive_clock_uncertainty
 
-# Input delays
-set_input_delay -clock {FPGA_CLK2_50} -max 3 [all_inputs]
-set_input_delay -clock {FPGA_CLK2_50} -min 2 [all_inputs]
+# Tell Quartus that our inline 25MHz video PLL is asynchronous to the system clocks.
+# This isolates the video scaler and stops the SPI bus from crashing!
+set_clock_groups -asynchronous \
+    -group [get_clocks {FPGA_CLK1_50 FPGA_CLK2_50 FPGA_CLK3_50}] \
+    -group [get_clocks {emu|video_pll|general[0].gpll~PLL_OUTPUT_COUNTER|divclk}]
