@@ -84,18 +84,29 @@ module hk628_core (
 
     // --- Output Mixer ---
     always @(posedge clk) begin
-        case (state)
-            // States 5 & 6 (Bombs): LFSR noise, but drops to TRUE SILENCE (16'd0) after 15000 ticks.
-            5, 6: pcm_out <= (counter < 15000) ? (lfsr[0] ? 16'h3000 : 16'hD000) : 16'd0; 
+        if (state == 0) begin
+            // Perfect silence when off
+            pcm_out <= 16'd0;
             
-            // State 8 (Machine Gun): Toggles standard tone, but drops to TRUE SILENCE during the gaps.
-            8:    pcm_out <= counter[11] ? (speaker_state ? 16'h3000 : 16'hD000) : 16'd0; 
+        end else if (state == 5 || state == 6) begin
+            // Bombs: Play LFSR noise for a short burst, then true silence
+            if (counter < 15000) begin
+                pcm_out <= lfsr[0] ? 16'h3000 : 16'hD000;
+            end else begin
+                pcm_out <= 16'd0;
+            end
             
-            // State 0: Perfect silence when off.
-            0:    pcm_out <= 16'd0; 
+        end else if (state == 8) begin
+            // Machine Gun: Tone bursts alternating with true silence
+            if (counter[11]) begin
+                pcm_out <= speaker_state ? 16'h3000 : 16'hD000;
+            end else begin
+                pcm_out <= 16'd0;
+            end
             
-            // States 1-4 (D-Pad) & 7 (Electric Gun): Standard continuous tone.
-            default: pcm_out <= speaker_state ? 16'h3000 : 16'hD000;
-        endcase
+        end else begin
+            // States 1-4 (D-Pad) & 7: Standard continuous tone
+            pcm_out <= speaker_state ? 16'h3000 : 16'hD000;
+        end
     end
 endmodule
