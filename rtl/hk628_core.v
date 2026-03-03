@@ -2,7 +2,7 @@ module hk628_core (
     input wire clk,           // 50MHz
     input wire [7:0] btn,     // 8 Sound Buttons
     input wire low_batt_btn,  // Hold this to simulate dying battery
-    output reg [15:0] pcm_out // 16-bit Signed Audio
+    output reg signed [15:0] pcm_out // Explicitly SIGNED 16-bit Audio
 );
 
     // --- Dual Clock Domain (The Timing Fix) ---
@@ -32,6 +32,7 @@ module hk628_core (
 
     always @(posedge clk) begin
         if (macro_tick) begin
+            // LFSR generates pseudo-random noise for explosions
             lfsr <= {lfsr[14:0], lfsr[15] ^ lfsr[13] ^ lfsr[12] ^ lfsr[10]};
             
             if (state == 0) begin
@@ -40,8 +41,8 @@ module hk628_core (
                     if (btn[1]) state <= 2; // Echo Rifle
                     if (btn[2]) state <= 3; // Phone
                     if (btn[3]) state <= 4; // Dual Tone
-                    if (btn[4]) state <= 5; // Bomb 1
-                    if (btn[5]) state <= 6; // Bomb 2
+                    if (btn[4]) state <= 5; // Bomb 1 (Whistle)
+                    if (btn[5]) state <= 6; // Bomb 2 (Explosion)
                     if (btn[6]) state <= 7; // Electric Gun
                     if (btn[7]) state <= 8; // Machine Gun
                     counter <= 0;
@@ -56,8 +57,10 @@ module hk628_core (
                 2: freq_period <= 200 + {counter[9:0], 2'b00};
                 3: freq_period <= counter[11] ? 800 : 500;
                 4: freq_period <= counter[10] ? 400 : 300;
-                7: freq_period <= 100 + (lfsr[5:0] << 2);
-                8: freq_period <= 300;
+                5: freq_period <= 200 + counter[13:3];         // Bomb Drop (Falling pitch)
+                6: freq_period <= 0;                           // Explosion (Uses LFSR noise)
+                7: freq_period <= 100 + (lfsr[5:0] << 2);      // Electric Gun (Pitch jitter)
+                8: freq_period <= 300;                         // Machine Gun
                 default: freq_period <= 0;
             endcase
         end
@@ -78,31 +81,37 @@ module hk628_core (
 
     // --- Output Mixer ---
     always @(posedge clk) begin
-        case (state)
-            5, 6: begin
-                // Bombs: LFSR noise, then true silence
-                if (counter < 15000) begin
-                    pcm_out <= lfsr[0] ? 16'h3000 : 16'hD000;
-                end else begin
-                    pcm_out <= 16'd0;
-                end
+        if (state == 0) begin
+            // Perfect silence when off
+            pcm_out <= 16'sd0;
+            
+        end else if (state == 5) begin
+            // Bomb 1: Falling Whistle (Tone based!)
+            if (counter < 20000) begin
+                pcm_out <= speaker_state ? 16'sd12288 : -16'sd12288;
+            end else begin
+                pcm_out <= 16'sd0;
             end
-            8: begin
-                // Machine Gun: Tone bursts, then true silence
-                if (counter[11]) begin
-                    pcm_out <= speaker_state ? 16'h3000 : 16'hD000;
-                end else begin
-                    pcm_out <= 16'd0;
-                end
+            
+        end else if (state == 6) begin
+            // Bomb 2: Explosion (Noise based!)
+            if (counter < 15000) begin
+                pcm_out <= lfsr[0] ? 16'sd12288 : -16'sd12288;
+            end else begin
+                pcm_out <= 16'sd0;
             end
-            0: begin
-                // Perfect silence when off
-                pcm_out <= 16'd0;
+            
+        end else if (state == 8) begin
+            // Machine Gun: Tone bursts alternating with true silence
+            if (counter[11]) begin
+                pcm_out <= speaker_state ? 16'sd12288 : -16'sd12288;
+            end else begin
+                pcm_out <= 16'sd0;
             end
-            default: begin
-                // D-Pad and standard tones
-                pcm_out <= speaker_state ? 16'h3000 : 16'hD000;
-            end
-        endcase
+            
+        end else begin
+            // States 1-4 (D-Pad) and 7 (Electric Zap)
+            pcm_out <= speaker_state ? 16'sd12288 : -16'sd12288;
+        end
     end
 endmodule
