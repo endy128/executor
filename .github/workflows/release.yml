@@ -31,6 +31,22 @@ jobs:
         uses: docker://ghcr.io/raetro/quartus:mister
         with:
           args: quartus_sh --flow compile MySoundToy
+      
+      - name: Prepare RBF with Date
+        run: |
+          # Get current date in YYYYMMDD format
+          DATE_STR=$(date +'%Y%m%d')
+          # Define the source and destination paths
+          SRC="output_files/MySoundToy.rbf"
+          DST="output_files/MySoundToy_${DATE_STR}.rbf"
+          
+          if [ -f "$SRC" ]; then
+            mv "$SRC" "$DST"
+            echo "Renamed $SRC to $DST"
+          else
+            echo "Error: RBF file not found at $SRC"
+            exit 1
+          fi
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
