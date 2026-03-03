@@ -6,10 +6,8 @@ module hk628_core (
 );
 
     // --- Dual Clock Domain (The Timing Fix) ---
-    // The Micro Timer generates a ~1MHz clock for the audio pitch
     reg [15:0] micro_limit;
     always @(posedge clk) begin
-        // 50MHz / 50 = 1MHz (Normal). 50MHz / 120 = 416kHz (Dying Battery)
         micro_limit <= low_batt_btn ? 16'd120 : 16'd50; 
     end
 
@@ -17,7 +15,6 @@ module hk628_core (
     wire micro_tick = (micro_cnt >= micro_limit);
     always @(posedge clk) micro_cnt <= micro_tick ? 16'd0 : micro_cnt + 16'd1;
 
-    // The Macro Timer divides the 1MHz clock down to ~20kHz for the state machine tempo
     reg [5:0] macro_cnt;
     wire macro_tick = micro_tick && (macro_cnt == 6'd49);
     always @(posedge clk) begin
@@ -33,7 +30,6 @@ module hk628_core (
     reg speaker_state;
     reg [15:0] lfsr = 16'hACE1;
 
-    // 1. MACRO DOMAIN: Tempo and LFSR (Updates at ~20kHz)
     always @(posedge clk) begin
         if (macro_tick) begin
             lfsr <= {lfsr[14:0], lfsr[15] ^ lfsr[13] ^ lfsr[12] ^ lfsr[10]};
@@ -55,20 +51,18 @@ module hk628_core (
                 if (counter > 30000) state <= 0; // Reset after ~1.5s
             end
 
-            // Synthesis Logic
             case (state)
-                1: freq_period <= 200 + counter[10:0];         // Rifle Sweep
-                2: freq_period <= 200 + {counter[9:0], 2'b00}; // Echo Rifle
-                3: freq_period <= counter[11] ? 800 : 500;     // Telephone
-                4: freq_period <= counter[10] ? 400 : 300;     // Dual Tone Rifle
-                7: freq_period <= 100 + (lfsr[5:0] << 2);      // Electric Gun
-                8: freq_period <= 300;                         // Machine Gun base pitch
+                1: freq_period <= 200 + counter[10:0];
+                2: freq_period <= 200 + {counter[9:0], 2'b00};
+                3: freq_period <= counter[11] ? 800 : 500;
+                4: freq_period <= counter[10] ? 400 : 300;
+                7: freq_period <= 100 + (lfsr[5:0] << 2);
+                8: freq_period <= 300;
                 default: freq_period <= 0;
             endcase
         end
     end
 
-    // 2. MICRO DOMAIN: Audio Pitch Generation (Updates at ~1MHz)
     always @(posedge clk) begin
         if (micro_tick) begin
             if (freq_period > 0) begin
@@ -84,29 +78,31 @@ module hk628_core (
 
     // --- Output Mixer ---
     always @(posedge clk) begin
-        if (state == 0) begin
-            // Perfect silence when off
-            pcm_out <= 16'd0;
-            
-        end else if (state == 5 || state == 6) begin
-            // Bombs: Play LFSR noise for a short burst, then true silence
-            if (counter < 15000) begin
-                pcm_out <= lfsr[0] ? 16'h3000 : 16'hD000;
-            end else begin
+        case (state)
+            5, 6: begin
+                // Bombs: LFSR noise, then true silence
+                if (counter < 15000) begin
+                    pcm_out <= lfsr[0] ? 16'h3000 : 16'hD000;
+                end else begin
+                    pcm_out <= 16'd0;
+                end
+            end
+            8: begin
+                // Machine Gun: Tone bursts, then true silence
+                if (counter[11]) begin
+                    pcm_out <= speaker_state ? 16'h3000 : 16'hD000;
+                end else begin
+                    pcm_out <= 16'd0;
+                end
+            end
+            0: begin
+                // Perfect silence when off
                 pcm_out <= 16'd0;
             end
-            
-        end else if (state == 8) begin
-            // Machine Gun: Tone bursts alternating with true silence
-            if (counter[11]) begin
+            default: begin
+                // D-Pad and standard tones
                 pcm_out <= speaker_state ? 16'h3000 : 16'hD000;
-            end else begin
-                pcm_out <= 16'd0;
             end
-            
-        end else begin
-            // States 1-4 (D-Pad) & 7: Standard continuous tone
-            pcm_out <= speaker_state ? 16'h3000 : 16'hD000;
-        end
+        endcase
     end
 endmodule
