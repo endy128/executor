@@ -5,15 +5,26 @@ module hk628_core (
     output reg signed [15:0] pcm_out // 16-bit Signed Audio
 );
 
-    // --- Low Battery / Turbo Logic ---
-    reg [15:0] tick_limit;
+    // --- Dual Clock Domain (The Timing Fix) ---
+    // 1. The Micro Timer generates a ~1MHz clock for the audio pitch
+    reg [15:0] micro_limit;
     always @(posedge clk) begin
-        tick_limit <= low_batt_btn ? 6000 : 2500; 
+        // 50MHz / 50 = 1MHz (Normal). 50MHz / 120 = 416kHz (Dying Battery)
+        micro_limit <= low_batt_btn ? 16'd120 : 16'd50; 
     end
 
-    reg [15:0] tick_cnt;
-    wire tick = (tick_cnt >= tick_limit);
-    always @(posedge clk) tick_cnt <= tick ? 0 : tick_cnt + 1;
+    reg [15:0] micro_cnt;
+    wire micro_tick = (micro_cnt >= micro_limit);
+    always @(posedge clk) micro_cnt <= micro_tick ? 16'd0 : micro_cnt + 16'd1;
+
+    // 2. The Macro Timer divides the 1MHz clock down to ~20kHz for the tempo/LFSR
+    reg [5:0] macro_cnt;
+    wire macro_tick = micro_tick && (macro_cnt == 6'd49);
+    always @(posedge clk) begin
+        if (micro_tick) begin
+            macro_cnt <= macro_tick ? 6'd0 : macro_cnt + 6'd1;
+        end
+    end
 
     // --- State Machine ---
     reg [3:0] state = 1;
@@ -22,8 +33,9 @@ module hk628_core (
     reg speaker_state;
     reg [15:0] lfsr = 16'hACE1;
 
+    // --- MACRO DOMAIN: Tempo and LFSR (Updates at ~20kHz) ---
     always @(posedge clk) begin
-        if (tick) begin
+        if (macro_tick) begin
             lfsr <= {lfsr[14:0], lfsr[15] ^ lfsr[13] ^ lfsr[12] ^ lfsr[10]};
             
             if (state == 0) begin
@@ -32,9 +44,9 @@ module hk628_core (
                     if (btn[1]) state <= 2; // Echo Rifle
                     if (btn[2]) state <= 3; // Phone
                     if (btn[3]) state <= 4; // Dual Tone
-                    if (btn[4]) state <= 5; // Bomb 1
-                    if (btn[5]) state <= 6; // Bomb 2
-                    if (btn[6]) state <= 7; // Electric Gun
+                    if (btn[4]) state <= 5; // Bomb Drop (Falling Pitch)
+                    if (btn[5]) state <= 6; // Explosion (Noise)
+                    if (btn[6]) state <= 7; // Electric Zapper
                     if (btn[7]) state <= 8; // Machine Gun
                     counter <= 0;
                 end
@@ -43,27 +55,36 @@ module hk628_core (
                 if (counter > 30000) state <= 0; // Reset after ~1.5s
             end
 
-            // --- Synthesis Logic for each Sound ---
+            // Synthesis Logic (Tuned for 90s Toy Sounds)
             case (state)
-                1: freq_period <= 200 + counter[10:0]; // Rifle Sweep
-                2: freq_period <= 200 + {counter[9:0], 2'b00}; // Echo Rifle
-                3: freq_period <= counter[11] ? 800 : 500; // Telephone
-                4: freq_period <= counter[10] ? 400 : 300; // Dual Tone Rifle
-                7: freq_period <= 100 + (lfsr[5:0] << 2); // Electric Gun (Chaos)
-                8: freq_period <= 300; // Machine Gun base pitch
+                1: freq_period <= 200 + counter[10:0];         
+                2: freq_period <= 200 + {counter[9:0], 2'b00}; 
+                3: freq_period <= counter[11] ? 800 : 500;     
+                4: freq_period <= counter[10] ? 400 : 300;     
+                5: freq_period <= 200 + counter[13:3];         
+                6: freq_period <= 0;                           
+                7: freq_period <= 150 + lfsr[5:0];             
+                8: freq_period <= 300;                         
                 default: freq_period <= 0;
             endcase
-            
+        end
+    end
+
+    // --- MICRO DOMAIN: Audio Pitch Generation (Updates at ~1MHz) ---
+    always @(posedge clk) begin
+        if (micro_tick) begin
             if (freq_period > 0) begin
                 if (tone_cnt >= freq_period) begin
                     tone_cnt <= 0;
                     speaker_state <= ~speaker_state;
-                end else tone_cnt <= tone_cnt + 1;
+                end else begin
+                    tone_cnt <= tone_cnt + 1;
+                end
             end
         end
     end
 
-    // --- Output Mixer ---
+    // --- Output Mixer (Flattened & Crash-Proof) ---
     always @(posedge clk) begin
         if (state == 0) begin
             // Perfect silence when off
